@@ -3,77 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BILIM MEZONI - Arab tili va CEFR</title>
-    <!-- Supabase JS SDK -->
+    <title>BILIM MEZONI</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; text-align: center; color: #333; }
-        .container { max-width: 600px; margin: 50px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h1 { color: #2c3e50; }
-        p { color: #7f8c8d; line-height: 1.6; }
-        .btn { display: inline-block; margin-top: 20px; padding: 12px 25px; background: #3498db; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; border: none; cursor: pointer; }
-        .btn:hover { background: #2980b9; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; color: #1e293b; }
+        .container { max-width: 440px; margin: 40px auto; background: #ffffff; padding: 28px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
+        h1 { margin-top: 0; color: #0f172a; }
+        p { color: #475569; line-height: 1.5; }
+        .btn { display: inline-block; width: 100%; background: #2563eb; color: #ffffff; border: none; padding: 12px 16px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; text-decoration: none; box-sizing: border-box; margin-top: 10px; }
+        .btn:hover { background: #1d4ed8; }
+        .btn-admin { background: #16a34a; }
+        .btn-admin:hover { background: #15803d; }
         .form-group { margin-top: 15px; text-align: left; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
-        #login-modal { display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
-        .error { color: #e74c3c; margin-top: 10px; }
-        .success { color: #27ae60; margin-top: 10px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; }
+        .form-group input { width: 100%; padding: 11px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+        #login-modal { display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+        .error { color: #dc2626; margin-top: 12px; font-size: 14px; text-align: left; }
+        .success { color: #15803d; margin-top: 12px; font-size: 14px; font-weight: 600; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>BILIM MEZONI</h1>
         <p>Arab tili va CEFR imtihonlariga tayyorgarlik ko'rish uchun zamonaviy onlayn platformaga xush kelibsiz!</p>
-        <button class="btn" onclick="toggleLogin()">Tizimga kirish</button>
+
+        <button class="btn" id="openLoginBtn" onclick="toggleLogin()">Tizimga kirish</button>
 
         <div id="login-modal">
-            <h3>Tizimga kirish</h3>
             <div class="form-group">
-                <label>Email:</label>
+                <label for="email">Email:</label>
                 <input type="email" id="email" placeholder="Email kiriting">
             </div>
             <div class="form-group">
-                <label>Parol:</label>
+                <label for="password">Parol:</label>
                 <input type="password" id="password" placeholder="Parolni kiriting">
             </div>
-            <button class="btn" onclick="handleLogin()">Kirish</button>
-            <div id="message"></div>
+            <button class="btn" id="loginSubmitBtn" onclick="handleLogin()">Kirish</button>
         </div>
+
+        <div id="message"></div>
+        <a id="adminLink" class="btn btn-admin" href="admin.html" style="display:none;">🚀 Admin Panelga o‘tish</a>
     </div>
 
     <script>
-        // Supabase ulanishi
-        const SUPABASE_URL = 'https://pnmvbmcknxqhxrvckbgy.supabase.co';
-        const SUPABASE_ANON_KEY = 'Sb_publishable_b_7uJ7RhH23kxKS9zEaWJg_sFgi4FJW';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const SUPABASE_URL = "https://pnmvbmcknxqhxrvckbgy.supabase.co";
+        const SUPABASE_KEY = "Sb_publishable_b_7uJ7RhH23kxKS9zEaWJg_sFgi4FJW";
+        let sbClient = null;
+
+        try {
+            if (window.supabase && typeof window.supabase.createClient === "function") {
+                sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            }
+        } catch (e) {
+            console.error(e);
+        }
 
         function toggleLogin() {
-            const modal = document.getElementById('login-modal');
-            modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+            const modal = document.getElementById("login-modal");
+            const msgDiv = document.getElementById("message");
+            if (!sbClient) {
+                msgDiv.innerHTML = "Supabase ulanmadi. Internetni tekshirib, sahifani yangilang.";
+                msgDiv.className = "error";
+                return;
+            }
+            modal.style.display = (modal.style.display === "block") ? "none" : "block";
         }
 
         async function handleLogin() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const msgDiv = document.getElementById('message');
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            const msgDiv = document.getElementById("message");
+            const adminLink = document.getElementById("adminLink");
+
+            if (!email || !password) {
+                msgDiv.innerHTML = "Email va parolni kiriting.";
+                msgDiv.className = "error";
+                return;
+            }
 
             msgDiv.innerHTML = "Tekshirilmoqda...";
             msgDiv.className = "";
 
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await sbClient.auth.signInWithPassword({
                 email: email,
-                password: password,
+                password: password
             });
 
             if (error) {
                 msgDiv.innerHTML = "Xatolik: " + error.message;
                 msgDiv.className = "error";
+                adminLink.style.display = "none";
             } else {
-                msgDiv.innerHTML = "Muvaffaqiyatli kirildi! Xush kelibsiz, " + data.user.email;
+                msgDiv.innerHTML = "Muvaffaqiyatli kirildi! " + data.user.email;
                 msgDiv.className = "success";
+                document.getElementById("login-modal").style.display = "none";
+                document.getElementById("openLoginBtn").style.display = "none";
+                adminLink.style.display = "inline-block";
             }
         }
+
+        (async function checkExistingSession() {
+            if (!sbClient) return;
+            const { data } = await sbClient.auth.getSession();
+            if (data && data.session && data.session.user) {
+                document.getElementById("message").innerHTML = "Siz tizimga kirgansiz: " + data.session.user.email;
+                document.getElementById("message").className = "success";
+                document.getElementById("openLoginBtn").style.display = "none";
+                document.getElementById("adminLink").style.display = "inline-block";
+            }
+        })();
     </script>
 </body>
 </html>

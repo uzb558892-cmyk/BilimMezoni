@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BILIM MEZONI — Super Admin Panel</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: #0f172a; color: #f8fafc; padding: 16px; }
+    .container { max-width: 780px; margin: 0 auto; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+    h1, h2 { margin-top: 0; }
+    label { display: block; font-size: 14px; color: #cbd5e1; margin: 10px 0 6px; }
+    input, select, textarea {
+      width: 100%; padding: 11px 12px; border-radius: 10px;
+      border: 1px solid #475569; background: #0f172a; color: #f8fafc; font-size: 15px;
+    }
+    textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+    button {
+      margin-top: 12px; width: 100%; padding: 12px 16px; border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .btn-ai { background: #2563eb; color: #fff; }
+    .btn-save { background: #16a34a; color: #fff; }
+    .btn-secondary { background: #334155; color: #f8fafc; margin-top: 8px; }
+    .msg { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 14px; display: none; }
+    .msg.ok { display: block; background: #14532d; color: #bbf7d0; }
+    .msg.err { display: block; background: #7f1d1d; color: #fecaca; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .badge { background: #0ea5e9; color: #0f172a; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .lesson-item { border-top: 1px solid #334155; padding: 10px 0; }
+    .lesson-item:first-child { border-top: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="statusCard" class="card">
+      <p id="authStatus">Tizimga kirish va Super Admin huquqi tekshirilmoqda...</p>
+      <a href="index.html" style="color:#38bdf8;">← Bosh sahifaga qaytish</a>
+    </div>
+
+    <div id="adminPanel" style="display:none;">
+      <div class="card top-bar">
+        <div>
+          <h1>BILIM MEZONI — Admin Panel</h1>
+          <span class="badge">SUPER ADMIN</span>
+        </div>
+        <button class="btn-secondary" style="width:auto;margin:0;" onclick="logout()">Chiqish</button>
+      </div>
+
+      <div class="card">
+        <h2>1. Sun’iy Intellekt (SI) orqali dars yaratish</h2>
+
+        <label for="track">Yo‘nalish</label>
+        <select id="track">
+          <option value="arabic">Arab tili</option>
+          <option value="cefr">CEFR</option>
+        </select>
+
+        <label for="levelOrTopic">Daraja yoki bo‘lim (masalan: A1, B1, Nahv, Lug‘at)</label>
+        <input id="levelOrTopic" type="text" placeholder="Masalan: B1 yoki Nahv" />
+
+        <label for="topic">Dars mavzusi</label>
+        <input id="topic" type="text" placeholder="Masalan: Fe'l zamonlari yoki Present Perfect" />
+
+        <button id="generateBtn" class="btn-ai" onclick="generateLesson()">✨ SI orqali dars yaratish</button>
+        <div id="genMsg" class="msg"></div>
+      </div>
+
+      <div class="card">
+        <h2>2. Darsni ko‘rib chiqish va bazaga saqlash</h2>
+
+        <label for="lessonTitle">Dars sarlavhasi</label>
+        <input id="lessonTitle" type="text" placeholder="Sarlavha shu yerda paydo bo'ladi" />
+
+        <label for="lessonContent">Dars matni (tahrirlashingiz mumkin)</label>
+        <textarea id="lessonContent" placeholder="SI yaratgan dars matni shu yerda chiqadi..."></textarea>
+
+        <button id="saveBtn" class="btn-save" onclick="saveLesson()">💾 Bazaga saqlash (Publish)</button>
+        <div id="saveMsg" class="msg"></div>
+      </div>
+
+      <div class="card">
+        <h2>3. Oxirgi qo‘shilgan darslar</h2>
+        <div id="lessonsList">Yuklanmoqda...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://pnmvbmcknxqhxrvckbgy.supabase.co";
+    const SUPABASE_KEY = "Sb_publishable_b_7uJ7RhH23kxKS9zEaWJg_sFgi4FJW";
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentUser = null;
+
+    function showMsg(elId, text, isOk) {
+      const el = document.getElementById(elId);
+      el.textContent = text;
+      el.className = "msg " + (isOk ? "ok" : "err");
+    }
+
+    async function checkSuperAdmin() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || !session.user) {
+        document.getElementById("authStatus").innerHTML =
+          'Siz tizimga kirmagansiz. Avval <a href="index.html" style="color:#38bdf8;">index.html</a> orqali kiring.';
+        return;
+      }
+
+      currentUser = session.user;
+
+      const { data: profile, error } = await sb
+        .from("profiles")
+        .select("role")
+        .eq("id", currentUser.id)
+        .single();
+
+      if (error || profile?.role !== "super_admin") {
+        document.getElementById("authStatus").innerHTML =
+          'Kirish taqiqlangan: sizda <b>super_admin</b> huquqi yo‘q. <a href="index.html" style="color:#38bdf8;">Bosh sahifaga qaytish</a>';
+        return;
+      }
+
+      document.getElementById("statusCard").style.display = "none";
+      document.getElementById("adminPanel").style.display = "block";
+      loadLessons();
+    }
+
+    async function generateLesson() {
+      const track = document.getElementById("track").value;
+      const level_or_topic = document.getElementById("levelOrTopic").value.trim();
+      const topic = document.getElementById("topic").value.trim();
+      const btn = document.getElementById("generateBtn");
+
+      if (!level_or_topic || !topic) {
+        showMsg("genMsg", "Iltimos, daraja/bo‘lim va mavzuni kiriting.", false);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "⏳ SI dars tayyorlamoqda...";
+      showMsg("genMsg", "So‘rov yuborildi, kuting...", true);
+
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-lesson`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`,
+            "apikey": SUPABASE_KEY
+          },
+          body: JSON.stringify({ track, level_or_topic, topic })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "SI dars yaratishda xatolik yuz berdi.");
+        }
+
+        document.getElementById("lessonTitle").value = data.title || "";
+        document.getElementById("lessonContent").value = data.content || "";
+        showMsg("genMsg", "Dars tayyor! Matnni tekshirib, pastda saqlashingiz mumkin.", true);
+      } catch (err) {
+        showMsg("genMsg", "Xato: " + err.message, false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "✨ SI orqali dars yaratish";
+      }
+    }
+
+    async function saveLesson() {
+      const track = document.getElementById("track").value;
+      const level_or_topic = document.getElementById("levelOrTopic").value.trim() || "Umumiy";
+      const title = document.getElementById("lessonTitle").value.trim();
+      const content = document.getElementById("lessonContent").value.trim();
+      const btn = document.getElementById("saveBtn");
+
+      if (!title || !content) {
+        showMsg("saveMsg", "Sarlavha va dars matni bo‘sh bo‘lmasligi kerak.", false);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Saqlanmoqda...";
+
+      try {
+        const { error } = await sb.from("lessons").insert({
+          track,
+          level_or_topic,
+          title,
+          content,
+          created_by: currentUser.id
+        });
+
+        if (error) throw error;
+
+        showMsg("saveMsg", "Dars muvaffaqiyatli bazaga saqlandi!", true);
+        loadLessons();
+      } catch (err) {
+        showMsg("saveMsg", "Saqlashda xato: " + err.message, false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "💾 Bazaga saqlash (Publish)";
+      }
+    }
+
+    async function loadLessons() {
+      const box = document.getElementById("lessonsList");
+      const { data, error } = await sb
+        .from("lessons")
+        .select("id, track, level_or_topic, title, created_at")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (error) {
+        box.textContent = "Darslarni yuklashda xato: " + error.message;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        box.textContent = "Hali dars qo‘shilmagan.";
+        return;
+      }
+
+      box.innerHTML = data.map(item => `
+        <div class="lesson-item">
+          <b>${item.title}</b><br/>
+          <small style="color:#94a3b8;">
+            ${item.track === "arabic" ? "Arab tili" : "CEFR"} • ${item.level_or_topic}
+          </small>
+        </div>
+      `).join("");
+    }
+
+    async function logout() {
+      await sb.auth.signOut();
+      window.location.href = "index.html";
+    }
+
+    checkSuperAdmin();
+  </script>
+</body>
+</html>
